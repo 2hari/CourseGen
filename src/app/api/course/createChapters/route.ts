@@ -46,7 +46,43 @@ export async function POST(req: Request, res: Response) {
 
     const course_image = await getUnsplashImage(imageSearchTerm.image_search_term)
 
-    return NextResponse.json({ output_units, course_image })
+    const course = await prisma.course.create({
+      data: {
+        name: title,
+        image: course_image
+      }
+    })
+
+    for (const unit of output_units) {
+      const title = unit.title
+      const prismaUnit = await prisma.unit.create({
+        data: {
+          name: title,
+          courseId: course.id
+        }
+      })
+      await prisma.chapter.createMany({
+        data: unit.chapters.map((chapter) => {
+          return {
+            name: chapter.chapter_title,
+            youtubeSearchQuery: chapter.youtube_search_query,
+            unitId: prismaUnit.id
+          }
+        })
+      })
+    }
+    await prisma.user.update({
+      where: {
+        id: session.user.id
+      },
+      data: {
+        credits: {
+          decrement: 1
+        }
+      }
+    })
+
+    return NextResponse.json({ course_id: course.id })
   } catch (error) {
     if (error instanceof ZodError) {
       return new NextResponse('invalid body', { status: 400 })
